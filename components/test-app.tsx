@@ -2,30 +2,37 @@
 import { Separator } from "./ui/separator";
 import { CustomRadioButtons } from "./radio-buttons";
 import { useState, useRef, useEffect } from "react";
+import { useTestStore } from "@/providers/test-store-provider";
+
+import { Button } from "./ui/button";
+import { RestartIcon } from "./icons";
 
 export default function TestApp() {
   return (
     <>
-      <TestHeader />
-      <Separator className="my-4 bg-neutral-500" />
       <TestBody />
     </>
   );
 }
 
-const difficulty: string[] = ["Easy", "Medium", "Hard"];
-const modes: string[] = ["Timed (60s)", "Passage"];
+const TestDifficulty: string[] = ["Easy", "Medium", "Hard"];
+const TestModes: string[] = ["Timed (60s)", "Passage"];
 
-export function TestHeader() {
+interface TestHeaderProps {
+  wpm: number;
+  accuracy: number;
+}
+export function TestHeader({ wpm, accuracy }: TestHeaderProps) {
   return (
     <div className="w-full flex justify-between items-center">
       <div className="flex items-center gap-3 h-5">
         <p className="text-neutral-400 leading-[120%] tracking-[-0.6px] text-xl">
-          WPM: <span className="text-white font-semibold">0</span>
+          WPM: <span className="text-white font-semibold">{wpm}</span>
         </p>
         <Separator orientation="vertical" className="bg-neutral-500" />
         <p className="text-neutral-400 leading-[120%] tracking-[-0.6px] text-xl">
-          Accuracy: <span className="text-white font-semibold">100%</span>
+          Accuracy:{" "}
+          <span className="text-white font-semibold">{accuracy}%</span>
         </p>
         <Separator orientation="vertical" className="bg-neutral-500" />
         <p className="text-neutral-400 leading-[120%] tracking-[-0.6px] text-xl">
@@ -38,7 +45,7 @@ export function TestHeader() {
             Difficulty:
           </p>
           <div className="flex items-center gap-2">
-            {difficulty.map((val, index) => (
+            {TestDifficulty.map((val, index) => (
               <CustomRadioButtons
                 key={index}
                 value={val}
@@ -54,7 +61,7 @@ export function TestHeader() {
             Mode:
           </p>
           <div className="flex items-center gap-2">
-            {modes.map((val, index) => (
+            {TestModes.map((val, index) => (
               <CustomRadioButtons
                 key={index}
                 value={val}
@@ -73,49 +80,112 @@ export function TestBody() {
   const [targetText] = useState<string>(
     "Drake is the goat and it's not even debatable @ 101."
   );
+  const TIME_LIMIT = 60;
   const [userInput, setUserInput] = useState<string>("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const [startTime, setStartTime] = useState<number | null>(null);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!startTime) {
+      setStartTime(Date.now());
+    }
+
+    const newValue = e.target.value;
+
+    if (newValue.length < userInput.length) {
+      const deletedIndex = newValue.length;
+
+      if (userInput[deletedIndex] === targetText[deletedIndex]) {
+        return;
+      }
+    }
+
+    setUserInput(newValue);
+  };
+
+  const calculateStats = () => {
+    if (!startTime) return { wpm: 0, accuracy: 0 };
+    const timeInSeconds = (Date.now() - startTime) / 1000;
+    const characters = userInput.length;
+
+    let correctCharacters = 0;
+    for (let i = 0; i < userInput.length; i++) {
+      if (userInput[i] === targetText[i]) {
+        correctCharacters++;
+      }
+    }
+
+    const wpm = Math.round(correctCharacters / 5 / (timeInSeconds / 60));
+    const accuracy =
+      userInput.length > 0
+        ? Math.round((correctCharacters / characters) * 100)
+        : 0;
+
+    return { wpm, accuracy };
+  };
+
+  const resetTest = () => {
+    setUserInput("");
+  };
+
+  const { wpm, accuracy } = calculateStats();
 
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
   return (
-    <div className="relative" onClick={() => inputRef.current?.focus()}>
-      <div className="text-[40px] tracking-[0.4px] leading-[136%]">
-        {targetText.split("").map((char, index) => {
-          let colorClass = "text-neutral-400";
-          let displayChar = char;
+    <>
+      <TestHeader wpm={wpm} accuracy={accuracy} />
+      <Separator className="my-4 bg-neutral-500" />
+      <div
+        className="relative h-109.5 md:h-162 lg:h-135"
+        onClick={() => inputRef.current?.focus()}
+      >
+        <div className="text-[40px] tracking-[0.4px] leading-[136%]">
+          {targetText.split("").map((char, index) => {
+            let colorClass = "text-neutral-400";
+            let displayChar = char;
 
-          if (index < userInput.length) {
-            const isCorrect = userInput[index] === char;
-            colorClass = isCorrect ? "text-green-500" : "text-red-500";
+            if (index < userInput.length) {
+              const isCorrect = userInput[index] === char;
+              colorClass = isCorrect ? "text-green-500" : "text-red-500";
 
-            if (!isCorrect && displayChar === " ") {
-              displayChar = "_";
-              colorClass = "bg-red-500/30";
+              if (!isCorrect && displayChar === " ") {
+                displayChar = "_";
+                colorClass = "bg-red-500/30";
+              }
             }
-          }
 
-          if (index === userInput.length) {
-            colorClass = "bg-neutral-500/50 rounded-sm";
-          }
+            if (index === userInput.length) {
+              colorClass = "bg-neutral-500/50 rounded-sm";
+            }
 
-          return (
-            <span key={index} className={colorClass}>
-              {char}
-            </span>
-          );
-        })}
+            return (
+              <span key={index} className={colorClass}>
+                {char}
+              </span>
+            );
+          })}
+        </div>
+        <input
+          className="absolute opacity-0 pointer-events-none"
+          ref={inputRef}
+          type="text"
+          value={userInput}
+          onChange={handleInputChange}
+          onBlur={() => inputRef.current?.focus()}
+          maxLength={targetText.length}
+        />
       </div>
-      <input
-        className="absolute opacity-0 pointer-events-none"
-        ref={inputRef}
-        type="text"
-        value={userInput}
-        onChange={(e) => setUserInput(e.target.value)}
-        onBlur={() => inputRef.current?.focus()}
-        maxLength={targetText.length}
-      />
-    </div>
+      <Separator className="my-4 bg-neutral-500" />
+      <div className="w-full mt-8 flex justify-center">
+        <Button
+          className="cursor-pointer bg-neutral-800 hover:bg-neutral-800"
+          onClick={resetTest}
+        >
+          Restart Test <RestartIcon />
+        </Button>
+      </div>
+    </>
   );
 }

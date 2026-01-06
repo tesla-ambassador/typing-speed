@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Sora } from "next/font/google";
 import "./globals.css";
 import Header from "@/components/header";
+import { TestStoreProvider } from "@/providers/test-store-provider";
 
 const soraSans = Sora({
   variable: "--font-sora",
@@ -23,8 +24,10 @@ export default function RootLayout({
       <body
         className={`${soraSans.variable} antialiased p-4 pb-8 md:p-8 lg:py-8 lg:px-28`}
       >
-        <Header />
-        <main>{children}</main>
+        <TestStoreProvider>
+          <Header />
+          <main>{children}</main>
+        </TestStoreProvider>
       </body>
     </html>
   );
