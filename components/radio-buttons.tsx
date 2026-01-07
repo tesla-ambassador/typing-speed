@@ -4,7 +4,21 @@ interface CustomRadioButtons {
   defaultValue: string;
 }
 
-export function CustomRadioButtons({ name, value, defaultValue }: CustomRadioButtons) {
+import { useTestStore } from "@/providers/test-store-provider";
+
+export function CustomRadioButtons({
+  name,
+  value,
+  defaultValue,
+}: CustomRadioButtons) {
+  const { setMode, setDifficulty, startTest } = useTestStore((state) => state);
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (name === "mode") {
+      setMode(e.target.value);
+    } else if (name === "difficulty") {
+      setDifficulty(e.target.value);
+    }
+  };
   return (
     <label
       htmlFor={value}
@@ -18,6 +32,8 @@ export function CustomRadioButtons({ name, value, defaultValue }: CustomRadioBut
         value={value}
         name={name}
         defaultChecked={defaultValue === value}
+        onChange={handleChange}
+        disabled={startTest}
       />
     </label>
   );

@@ -6,6 +6,7 @@ import { useTestStore } from "@/providers/test-store-provider";
 
 import { Button } from "./ui/button";
 import { RestartIcon } from "./icons";
+import { clearInterval } from "timers";
 
 export default function TestApp() {
   return (
@@ -21,8 +22,10 @@ const TestModes: string[] = ["Timed (60s)", "Passage"];
 interface TestHeaderProps {
   wpm: number;
   accuracy: number;
+  timer: number | string;
 }
-export function TestHeader({ wpm, accuracy }: TestHeaderProps) {
+export function TestHeader({ wpm, accuracy, timer }: TestHeaderProps) {
+  const { mode, difficulty } = useTestStore((state) => state);
   return (
     <div className="w-full flex justify-between items-center">
       <div className="flex items-center gap-3 h-5">
@@ -36,7 +39,12 @@ export function TestHeader({ wpm, accuracy }: TestHeaderProps) {
         </p>
         <Separator orientation="vertical" className="bg-neutral-500" />
         <p className="text-neutral-400 leading-[120%] tracking-[-0.6px] text-xl">
-          Time: <span className="text-white font-semibold">0:60</span>
+          Time:{" "}
+          {mode === "Timed (60s)" ? (
+            <span className="text-white font-semibold">0:{timer}</span>
+          ) : (
+            <span className="text-white font-semibold">{timer}</span>
+          )}
         </p>
       </div>
       <div className="flex items-center gap-3 h-8">
@@ -84,6 +92,11 @@ export function TestBody() {
   const [userInput, setUserInput] = useState<string>("");
   const inputRef = useRef<HTMLInputElement>(null);
   const [startTime, setStartTime] = useState<number | null>(null);
+  const [timeLeft, setTimeLeft] = useState(TIME_LIMIT);
+  const [isComplete, setIsComplete] = useState<boolean>(false);
+  const [currentTime, setCurrentTime] = useState<number>(0);
+
+  const { mode, difficulty, stopTest } = useTestStore((state) => state);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!startTime) {
@@ -100,7 +113,44 @@ export function TestBody() {
       }
     }
 
+    if (newValue.length === targetText.length) {
+      setIsComplete(true);
+      stopTest();
+    }
+
     setUserInput(newValue);
+  };
+
+  useEffect(() => {
+    if (!startTime || isComplete) return;
+
+    const interval = window.setInterval(() => {
+      if (mode === "Timed (60s)") {
+        // Countdown timer
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        const remaining = TIME_LIMIT - elapsed;
+
+        setTimeLeft(remaining);
+
+        if (remaining <= 0) {
+          setIsComplete(true);
+          setTimeLeft(0);
+        }
+      } else {
+        // Count up timer
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        setCurrentTime(elapsed);
+      }
+    }, 1000);
+
+    return () => window.clearInterval(interval);
+  }, [startTime, isComplete, mode]);
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
   const calculateStats = () => {
@@ -126,6 +176,9 @@ export function TestBody() {
 
   const resetTest = () => {
     setUserInput("");
+    setCurrentTime(0);
+    setIsComplete(false);
+    setTimeLeft(TIME_LIMIT);
   };
 
   const { wpm, accuracy } = calculateStats();
@@ -135,7 +188,11 @@ export function TestBody() {
   }, []);
   return (
     <>
-      <TestHeader wpm={wpm} accuracy={accuracy} />
+      <TestHeader
+        wpm={wpm}
+        accuracy={accuracy}
+        timer={mode === "Timed (60s)" ? timeLeft : formatTime(currentTime)}
+      />
       <Separator className="my-4 bg-neutral-500" />
       <div
         className="relative h-109.5 md:h-162 lg:h-135"
