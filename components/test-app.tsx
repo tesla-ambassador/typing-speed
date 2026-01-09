@@ -6,7 +6,8 @@ import { useTestStore } from "@/providers/test-store-provider";
 
 import { Button } from "./ui/button";
 import { RestartIcon } from "./icons";
-import { clearInterval } from "timers";
+import SuccessPage from "./success-page";
+import { Results } from "@/types/resuts";
 
 export default function TestApp() {
   return (
@@ -95,8 +96,17 @@ export function TestBody() {
   const [timeLeft, setTimeLeft] = useState(TIME_LIMIT);
   const [isComplete, setIsComplete] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
+  const intervalRef = useRef<number | null>(null);
 
-  const { mode, difficulty, stopTest } = useTestStore((state) => state);
+  const {
+    mode,
+    difficulty,
+    stopTest,
+    setScore,
+    finishTest,
+    highScore,
+    setHighScore,
+  } = useTestStore((state) => state);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!startTime) {
@@ -115,6 +125,7 @@ export function TestBody() {
 
     if (newValue.length === targetText.length) {
       setIsComplete(true);
+      calculateHighScore(wpm);
       stopTest();
     }
 
@@ -122,9 +133,14 @@ export function TestBody() {
   };
 
   useEffect(() => {
+    if (intervalRef.current) {
+      window.clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+
     if (!startTime || isComplete) return;
 
-    const interval = window.setInterval(() => {
+    intervalRef.current = window.setInterval(() => {
       if (mode === "Timed (60s)") {
         // Countdown timer
         const elapsed = Math.floor((Date.now() - startTime) / 1000);
@@ -143,7 +159,11 @@ export function TestBody() {
       }
     }, 1000);
 
-    return () => window.clearInterval(interval);
+    return () => {
+      if (intervalRef.current !== null) {
+        window.clearInterval(intervalRef.current);
+      }
+    };
   }, [startTime, isComplete, mode]);
 
   const formatTime = (seconds: number) => {
@@ -171,78 +191,103 @@ export function TestBody() {
         ? Math.round((correctCharacters / characters) * 100)
         : 0;
 
-    return { wpm, accuracy };
+    return { wpm, accuracy, characters };
+  };
+
+  const calculateHighScore = (newWPM: number) => {
+    if (isComplete) {
+      if (newWPM > highScore) {
+        setHighScore(newWPM);
+      }
+    }
   };
 
   const resetTest = () => {
+    // Clear timer
+    if (intervalRef.current !== null) {
+      window.clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+
+    // Reset all state
     setUserInput("");
     setCurrentTime(0);
     setIsComplete(false);
     setTimeLeft(TIME_LIMIT);
+    setStartTime(null);
+
+    inputRef.current?.focus();
   };
 
-  const { wpm, accuracy } = calculateStats();
+  const { wpm, accuracy, characters } = calculateStats();
 
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
-  return (
-    <>
-      <TestHeader
-        wpm={wpm}
-        accuracy={accuracy}
-        timer={mode === "Timed (60s)" ? timeLeft : formatTime(currentTime)}
-      />
-      <Separator className="my-4 bg-neutral-500" />
-      <div
-        className="relative h-109.5 md:h-162 lg:h-135"
-        onClick={() => inputRef.current?.focus()}
-      >
-        <div className="text-[40px] tracking-[0.4px] leading-[136%]">
-          {targetText.split("").map((char, index) => {
-            let colorClass = "text-neutral-400";
-            let displayChar = char;
 
-            if (index < userInput.length) {
-              const isCorrect = userInput[index] === char;
-              colorClass = isCorrect ? "text-green-500" : "text-red-500";
-
-              if (!isCorrect && displayChar === " ") {
-                displayChar = "_";
-                colorClass = "bg-red-500/30";
-              }
-            }
-
-            if (index === userInput.length) {
-              colorClass = "bg-neutral-500/50 rounded-sm";
-            }
-
-            return (
-              <span key={index} className={colorClass}>
-                {char}
-              </span>
-            );
-          })}
-        </div>
-        <input
-          className="absolute opacity-0 pointer-events-none"
-          ref={inputRef}
-          type="text"
-          value={userInput}
-          onChange={handleInputChange}
-          onBlur={() => inputRef.current?.focus()}
-          maxLength={targetText.length}
+  if (finishTest && characters) {
+    return (
+      <SuccessPage wpm={wpm} accuracy={accuracy} characters={characters} />
+    );
+  } else {
+    return (
+      <>
+        <TestHeader
+          wpm={wpm}
+          accuracy={accuracy}
+          timer={mode === "Timed (60s)" ? timeLeft : formatTime(currentTime)}
         />
-      </div>
-      <Separator className="my-4 bg-neutral-500" />
-      <div className="w-full mt-8 flex justify-center">
-        <Button
-          className="cursor-pointer bg-neutral-800 hover:bg-neutral-800"
-          onClick={resetTest}
+        <Separator className="my-4 bg-neutral-500" />
+        <div
+          className="relative h-109.5 md:h-162 lg:h-135"
+          onClick={() => inputRef.current?.focus()}
         >
-          Restart Test <RestartIcon />
-        </Button>
-      </div>
-    </>
-  );
+          <div className="text-[40px] tracking-[0.4px] leading-[136%]">
+            {targetText.split("").map((char, index) => {
+              let colorClass = "text-neutral-400";
+              let displayChar = char;
+
+              if (index < userInput.length) {
+                const isCorrect = userInput[index] === char;
+                colorClass = isCorrect ? "text-green-500" : "text-red-500";
+
+                if (!isCorrect && displayChar === " ") {
+                  displayChar = "_";
+                  colorClass = "bg-red-500/30";
+                }
+              }
+
+              if (index === userInput.length) {
+                colorClass = "bg-neutral-500/50 rounded-sm";
+              }
+
+              return (
+                <span key={index} className={colorClass}>
+                  {char}
+                </span>
+              );
+            })}
+          </div>
+          <input
+            className="absolute opacity-0 pointer-events-none"
+            ref={inputRef}
+            type="text"
+            value={userInput}
+            onChange={handleInputChange}
+            onBlur={() => inputRef.current?.focus()}
+            maxLength={targetText.length}
+          />
+        </div>
+        <Separator className="my-4 bg-neutral-500" />
+        <div className="w-full mt-8 flex justify-center">
+          <Button
+            className="cursor-pointer bg-neutral-800 hover:bg-neutral-800"
+            onClick={resetTest}
+          >
+            Restart Test <RestartIcon />
+          </Button>
+        </div>
+      </>
+    );
+  }
 }
